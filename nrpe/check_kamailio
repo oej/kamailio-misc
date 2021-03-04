@@ -50,12 +50,16 @@ print_help() {
   echo ""
   echo "version"
   echo "   Check Kamailio version "
+  echo "uptime"
+  echo "   Check Kamailio uptime. Warn if recently restarted "
   echo "tcpconn"
   echo "   Check status of open TCP connections "
   echo "memory"
   echo "   Check Kamailio memory status"
   echo "processmemory"
   echo "   Check Kamailio process (PKG) memory status"
+  echo "registrations"
+  echo "   Check Kamailio UA registration status"
   echo "--help"
   echo "   Print this help screen"
   echo "--version"
@@ -94,6 +98,14 @@ check_kamailio_version() {
 	exit $STATE_OK
 }
 
+check_usrloc_regs()
+{
+    UAREGS=$($KAMCMD ul.dump|grep -c "AoR:")
+    EXITCODE=$STATE_OK
+    MSG="OK. "
+    echo "$MSG Current registrations  $UAREGS|uaregs=$UAREGS"
+    exit "$EXITCODE"
+}
 
 check_kamailio_mem() {
 	KAMOUTPUT=`$KAMAILIO -V`
@@ -295,6 +307,9 @@ tcpconn)
     ;;
 uptime)
     kamuptime
+    ;;
+registrations)
+    check_usrloc_regs
     ;;
 --help)
 		print_help
