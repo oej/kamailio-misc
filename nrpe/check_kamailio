@@ -60,6 +60,8 @@ print_help() {
   echo "   Check Kamailio process (PKG) memory status"
   echo "registrations"
   echo "   Check Kamailio UA registration status"
+  echo "rtpengine"
+  echo "   Check Kamailio connection status to rtpengine"
   echo "--help"
   echo "   Print this help screen"
   echo "--version"
@@ -283,9 +285,26 @@ then
 	EXITCODE="$STATE_CRITICAL"
 fi
 echo "$MSG Current connections $OPEN_CONN Max $MAX_CONN Used $CONNPERCENT %"
-exit $EXITCODE
+exit "$EXITCODE"
+}
 
-
+check_rtpengine()
+{
+    # May not work properly with multiple RTPengines. Needs testing.
+    RTPSTATUS=$($KAMCMD rtpengine.show all)
+    DISABLED=$(echo "$RTPSTATUS" | awk '/disabled:/ {print $2}')
+    URL=$(echo "$RTPSTATUS" | awk '/url:/ {print $2}')
+    if test "$DISABLED" = "1"
+    then
+        EXITCODE="$STATE_CRITICAL"
+        MSG="CRITICAL. "
+        echo "$MSG RTPengine disabled - no audio support. URL $URL"
+        exit "$EXITCODE"
+    fi
+    EXITCODE="$STATE_OK"
+    MSG="OK. "
+    echo "$MSG RTPengine enabled. URL $URL"
+    exit "$EXITCODE"
 }
 
 check_kamailio_fifo
@@ -310,6 +329,9 @@ uptime)
     ;;
 registrations)
     check_usrloc_regs
+    ;;
+rtpengine)
+    check_rtpengine
     ;;
 --help)
 		print_help
