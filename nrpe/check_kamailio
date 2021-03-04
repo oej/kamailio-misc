@@ -157,6 +157,29 @@ exit $EXITCODE
 
 }
 
+kamuptime()
+{
+        # kamcmd> core.uptime
+        # {
+        # now: Fri Dec  6 11:14:28 2019
+        # up_since: Thu Nov 14 06:35:28 2019
+        # uptime: 1917540
+        # }
+        UPSINCE=$("$KAMCMD" core.uptime|grep up_since)
+        UPTIME=$("$KAMCMD" core.uptime|grep uptime)
+        UPTIMESECS=$(echo "$UPTIME"|cut -d' ' -f2)
+        if test "$UPTIMESECS" -lt "3610"
+        then
+                EXITCODE=$STATE_WARNING
+                MSG="WARNING. Restarted! "
+        else
+                EXITCODE=$STATE_OK
+                MSG="OK. "
+        fi
+        echo "$MSG Current state: $UPSINCE -  $UPTIME|uptime_secs=${UPTIMESECS}s"
+        exit "$EXITCODE"
+}
+
 check_process_mem() {
 	EXITCODE=$STATE_OK
     EXITCODE=$STATE_OK
@@ -271,7 +294,7 @@ tcpconn)
     tcp_check
     ;;
 uptime)
-    cmd="$1"
+    kamuptime
     ;;
 --help)
 		print_help
