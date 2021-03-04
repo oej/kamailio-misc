@@ -1,71 +1,78 @@
 #!/bin/sh
 # set -x
-	# Nagios exit states:
- 	#	exit $STATE_OK
-	#	exit $STATE_UNKNOWN
-	#	exit $STATE_CRITICAL
-	#	exit $STATE_WARNING
-# Adapted by Edvina AB, Sollentuna, Sweden
 #  Olle E. Johansson (oej@edvina.net)
 # (C) Edvina AB 2010-2019
 # License: the 3-clause BSD License
 # https://opensource.org/licenses/BSD-3-Clause
 
-UNIXVER=`uname -s`
-PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 
+# NRPE Exit codes:
+ 	#	exit $STATE_OK
+	#	exit $STATE_UNKNOWN
+	#	exit "$STATE_CRITICAL"
+	#	exit $STATE_WARNING
+
+
+UNIXVER=$(uname -s)
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 KAMCMD=/usr/local/sbin/kamcmd
-if [ ! -x $KAMCMD ]
-then
-        KAMCMD=$(command -v kamcmd)
-fi
 KAMAILIO=/usr/local/sbin/kamailio
-if [ ! -x $KAMCMD ]
-then
-        KAMCMD=$(command -v kamcmd)
-fi
 KAMFIFO=/var/run/kamailio/kamailio_ctl
 EXPR="expr"
 
+
 . /usr/lib/nagios/plugins/utils.sh
 
-PROGNAME=`basename $0`
-PROGPATH=`echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,'`
+# Find out if this is GNU AWK or mawk
+AWKLINK=$(/bin/readlink -f "$(command -v awk)")
+AWKTYPE=$(/usr/bin/basename "$AWKLINK" )
+if test -z "$AWKTYPE"
+then
+    # mac os/x awk doesn't reveal any version at all
+    AWKTYPE="awk"
+fi
+
+
+PROGNAME=$(basename $0)
+PROGPATH=$(echo $0 | sed -e 's,[\\/][^\\/][^\\/]*$,,')
 
 print_usage() {
-	echo "Usage:"
-  	echo "  $PROGNAME --help"
-  	echo "  $PROGNAME <command> - see help for a list"
+  echo "Usage:"
+  echo "  $PROGNAME --help"
+  echo "  $PROGNAME --<command> - see help for a list"
 }
 
 print_help() {
-  	print_revision $PROGNAME $REVISION
-  	echo ""
-  	print_usage
-  	echo ""
-  	echo "version"
-  	echo "   Check Kamailio version "
-  	echo "tcpconn"
-  	echo "   Check status of open TCP connections "
-  	echo "memory"
-  	echo "   Check Kamailio memory status"
-  	echo "processmemory"
-  	echo "   Check Kamailio process (PKG) memory status"
-  	echo "--help"
-  	echo "   Print this help screen"
-  	echo "--version"
-  	echo "   Print version and license information"
-  	echo ""
-  	support
+  print_revision "$PROGNAME" "$REVISION"
+  echo ""
+  print_usage
+  echo ""
+  echo "version"
+  echo "   Check Kamailio version "
+  echo "tcpconn"
+  echo "   Check status of open TCP connections "
+  echo "memory"
+  echo "   Check Kamailio memory status"
+  echo "processmemory"
+  echo "   Check Kamailio process (PKG) memory status"
+  echo "--help"
+  echo "   Print this help screen"
+  echo "--version"
+  echo "   Print version and license information"
+  echo ""
+  echo ""
+  support
 }
 
 check_kamailio_fifo() {
-	if ! test -r $KAMFIFO
+	if ! test -r "$KAMFIFO"
 	then
 		echo "CRITICAL: Can't access Kamailio CTL file $KAMFIFO"
-		exit $STATE_CRITICAL
+		exit "$STATE_CRITICAL"
 	fi
 }
+
 
 check_kamailio_version() {
 	KAMOUTPUT=`$KAMAILIO -V`
@@ -81,87 +88,113 @@ check_kamailio_version() {
 	#
 	KAMVER=`echo $KAMOUTPUT |awk '/version/ {print $3}'`
 	KAMSYS=`echo $KAMOUTPUT |awk '/version/ {print substr($4,2,length($4)-2)}'`
-	#echo Debug: Version $KAMVER System $KAMSYS
+	#echo Version $KAMVER System $KAMSYS
+	# You can start kamailio with
 	echo "OK: $KAMVER $KAMSYS"
 	exit $STATE_OK
 }
 
 
 check_kamailio_mem() {
+	KAMOUTPUT=`$KAMAILIO -V`
+	#
+	# Output example
+	#
+	# version: kamailio 3.4.0-dev5 (x86_64/darwin) 04773c-dirty
+	#flags: STATS: Off, USE_IPV6, USE_TCP, USE_TLS, TLS_HOOKS, DISABLE_NAGLE, USE_MCAST, DNS_IP_HACK, SHM_MEM, SHM_MMAP, PKG_MALLOC, F_MALLOC, FAST_LOCK-ADAPTIVE_WAIT, USE_DNS_CACHE, USE_DNS_FAILOVER, USE_NAPTR, USE_DST_BLACKLIST, HAVE_RESOLV_RES
+	#ADAPTIVE_WAIT_LOOPS=1024, MAX_RECV_BUFFER_SIZE 262144, MAX_LISTEN 16, MAX_URI_SIZE 1024, BUF_SIZE 65535, DEFAULT PKG_SIZE 4MB
+	#poll method support: poll, select, kqueue.
+	#id: 04773c -dirty
+	#compiled on 09:58:11 Nov 11 2012 with gcc 4.2.1
+	#
+	KAMVER=`echo $KAMOUTPUT |awk '/version/ {print $3}'`
+	KAMSYS=`echo $KAMOUTPUT |awk '/version/ {print substr($4,2,length($4)-2)}'`
+	#echo Version $KAMVER System $KAMSYS
+	# You can start kamailio with
+	#  kamailio -AKAMVER=$KAMVER
 
-	# Output from kamcmd core.shmmem
-	#	{
-	#		total: 10485760
-	#		free: 5504296
-	#		used: 4674160
-	#		real_used: 4981464
-	#		max_used: 4991408
-	#		fragments: 20
-	#	}
-	SERMEM=`$KAMCMD core.shmmem`
+    # Output from sercmd core.shmmem
+#	{
+#		total: 10485760
+#		free: 5504296
+#		used: 4674160
+#		real_used: 4981464
+#		max_used: 4991408
+#		fragments: 20
+#	}
+KAMMEM=`$KAMCMD core.shmmem`
+#echo Status $?
+    if test "$AWKTYPE" = "gawk"
+    then
+        TOTALMEM=$(echo "$KAMMEM" | awk '/total:/ {print $3}')
+        FREEMEM=$(echo "$KAMMEM" | awk '/free:/ {print $5}')
+        MAXMEM=$(echo "$KAMMEM" | awk '/max_used:/ {print $11}')
+    else
+        TOTALMEM=$(echo "$KAMMEM" | awk '/total:/ {print $2}')
+        FREEMEM=$(echo "$KAMMEM" | awk '/free:/ {print $2}')
+        MAXMEM=$(echo "$KAMMEM" | awk '/max_used:/ {print $2}')
+    fi
 
-	TOTALMEM=`echo $SERMEM | awk '/total:/ {print $3}'`
-	FREEMEM=`echo $SERMEM | awk '/free:/ {print $5}'`
-	MAXMEM=`echo $SERMEM | awk '/max_used:/ {print $11}'`
-	TEMP=`$EXPR $FREEMEM \* 100`
-	FREEPRC=`$EXPR $TEMP / $TOTALMEM`
-	TEMP=`$EXPR $MAXMEM \* 100`
-	MAXPERCENT=`$EXPR \( $MAXMEM \* 100 \) / $TOTALMEM`
+TEMP=`$EXPR $FREEMEM \* 100`
+FREEPRC=`$EXPR $TEMP / $TOTALMEM`
+TEMP=`$EXPR $MAXMEM \* 100`
+MAXPERCENT=`$EXPR \( $MAXMEM \* 100 \) / $TOTALMEM`
 
-	EXITCODE=$STATE_OK
-	MSG="OK: "
-	if test $MAXMEM \> 90
-	then
-		MSG="CRITICAL: Max memory used has been over 90% - "
-		EXITCODE=$STATE_CRITICAL
-	fi
-	if test $FREEMEM \< 10
-	then
-		MSG="CRITICAL: Free core memory is below 10% - "
-		EXITCODE=$STATE_CRITICAL
-	fi
-	echo "$MSG Memory $TOTALMEM Free $FREEMEM ($FREEPRC %) Max used $MAXMEM ($MAXPERCENT %)"
-	exit $EXITCODE
+EXITCODE=$STATE_OK
+MSG="OK: "
+if test $MAXMEM \> 90
+then
+	MSG="CRITICAL: Max memory used has been over 90% - "
+	EXITCODE="$STATE_CRITICAL"
+fi
+if test $FREEMEM \< 10
+then
+	MSG="CRITICAL: Free core memory is below 10% - "
+	EXITCODE="$STATE_CRITICAL"
+fi
+echo "$MSG Memory $TOTALMEM Free $FREEMEM ($FREEPRC %) Max used $MAXMEM ($MAXPERCENT %)|totalmem=${TOTALMEM}b freemem=${FREEMEM}b max_used_mem=${MAXMEM}b current_used_mem=${USEDMEM}b"
+exit $EXITCODE
 
 }
 
 check_process_mem() {
 	EXITCODE=$STATE_OK
-	TMPDIR=$(mktemp --directory /tmp/kamcmd.XXXXXX)
-	TMPFILE=$TMPDIR/kammem.$$
+    EXITCODE=$STATE_OK
+    TMPDIR=$(mktemp --directory /tmp/kamcmd.XXXXXX)
+    TMPFILE=$TMPDIR/kammem.$$
 	MSG="OK. "
 	# { IDX: 1 PID: 13370 DSC: udp receiver child=0 sock=212.3.14.249:5060 }
 	# 850 attendant
-	$KAMCMD core.psx | awk '/IDX/ { getline; pid = $2 ; getline ; desc = $0 ; sub(/DSC:/,"",desc); print pid " " desc ; }' > $TMPFILE
+	$KAMCMD core.psx | awk '/IDX/ { getline; pid = $2 ; getline ; desc = $0 ; sub(/DSC:/,"",desc); print pid " " desc ; }' > "$TMPFILE"
 	# { entry: 0 pid: 13369 rank: 0 used: 871728 free: 3240456 real_used: 953848 }
-	REPORT=$($KAMCMD pkg.stats | awk -v ps=$TMPFILE 'BEGIN { 
-        while ( (getline < ps ) > 0)  { 
-              arg=$0; 
-              sub($1,"",arg); 
-              psarray[$1] = arg ; 
-        }; 
-     }; 
-     /pid:/ { pid = $2; 
-          getline; 
-          getline; 
-          getline; 
-          free[pid] = $2; 
-          getline; 
+	REPORT=$($KAMCMD pkg.stats | awk -v ps="$TMPFILE" 'BEGIN {
+        while ( (getline < ps ) > 0)  {
+              arg=$0;
+              sub($1,"",arg);
+              psarray[$1] = arg ;
+        };
+     };
+     /pid:/ { pid = $2;
+          getline;
+          getline;
+          getline;
+          free[pid] = $2;
+          getline;
           realused[pid] = $2;
-          next; 
+          next;
           };
-     END { 
-	 warnings = 0; 
-	 treshold=90; 
+     END {
+	 warnings = 0;
+	 treshold=90;
 	 output="";
          for (p in psarray ) {
-		 if ( (realused[p] / (free[p] + realused[p])*100) > treshold) 
-		     { 
+		 if ( (realused[p] / (free[p] + realused[p])*100) > treshold)
+		     {
 			 warnings = 1;
 			 output = output    " // " p " ("  psarray[p]  ") Memory used: "   int((realused[p] / (free[p] + realused[p])*100))   " % ";
 			 };
-             }; 
-         
+             };
+
 
 	if (warnings) {
 		print "WARNING: Process with low memory :: " , output;
@@ -171,48 +204,60 @@ check_process_mem() {
 		exit 0;
 	}
 }
-') 
-	if test $? != 0
-	then
-		EXITCODE=$STATE_CRITICAL
-		echo $REPORT
-	else
-		echo $REPORT
-	fi
+')
+if test $? != 0
+then
+	EXITCODE="$STATE_CRITICAL"
+	echo "$REPORT"
+else
+	echo "$REPORT"
+fi
 
-	/bin/rm -rf $TMPDIR
-	exit $EXITCODE
+/bin/rm "$TMPFILE"
+exit $EXITCODE
+
 }
 
-tcp_check() 
+tcp_check()
 {
-	#	kamcmd> core.tcp_info
-	#	{
+#	sercmd> core.tcp_info
+#	{
 	#	readers: 10
 	#	max_connections: 8000
 	#	max_tls_connections: 4096
 	#	opened_connections: 0
 	#	opened_tls_connections: 0
 	#	write_queued_bytes: 0
-	#	}
-	SERMEM=`$KAMCMD core.tcp_info`
+#	}
+KAMMEM=`$KAMCMD core.tcp_info`
 
-	MAX_CONN=`echo $SERMEM|awk '{print $5}'`
-	OPEN_CONN=`echo $SERMEM|awk '{print $9}'`
-	CONNPERCENT=`$EXPR \( $OPEN_CONN \* 100 \) / $MAX_CONN`
-	EXITCODE=$STATE_OK
-	MSG="OK. "
-	if test $CONNPERCENT \> 95
-	then
-		MSG="CRITICAL. Free TCP connections is below 5% - "
-		EXITCODE=$STATE_CRITICAL
-	fi
-	echo "$MSG Current connections $OPEN_CONN Max $MAX_CONN Used $CONNPERCENT %"
-	exit $EXITCODE
+   if test "$AWKTYPE" = "gawk"
+    then
+        MAX_CONN=$(echo "$KAMMEM"|awk '{print $5}')
+        OPEN_CONN=$(echo "$KAMMEM"|awk '{print $9}')
+    else
+        MAX_CONN=$(echo "$KAMMEM"|awk '/max_connections:/{print $2}')
+        OPEN_CONN=$(echo "$KAMMEM"|awk '/opened_connections:/{print $2}')
+    fi
+CONNPERCENT=`$EXPR \( $OPEN_CONN \* 100 \) / $MAX_CONN`
+EXITCODE="$STATE_OK"
+MSG="OK. "
+if test $CONNPERCENT \> 95
+then
+	MSG="CRITICAL. Free TCP connections is below 5% - "
+	EXITCODE="$STATE_CRITICAL"
+fi
+echo "$MSG Current connections $OPEN_CONN Max $MAX_CONN Used $CONNPERCENT %"
+exit $EXITCODE
+
+
 }
 
 check_kamailio_fifo
 case "$1" in
+health)
+	check_kamailio_health
+    	;;
 memory)
 	check_kamailio_mem
     	;;
@@ -229,23 +274,23 @@ uptime)
     cmd="$1"
     ;;
 --help)
-    print_help
+		print_help
     exit $STATE_OK
     ;;
 -h)
-    print_help
+	print_help
     exit $STATE_OK
     ;;
 --version)
-    print_revision $PROGNAME $REVISION
+		print_revision $PROGNAME $REVISION
     exit $STATE_OK
     ;;
 -V)
-    print_revision $PROGNAME $REVISION
+		print_revision $PROGNAME $REVISION
     exit $STATE_OK
     ;;
 *)
-    print_help
+	print_help
     exit $STATE_OK
     ;;
 esac
